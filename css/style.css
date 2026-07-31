@@ -616,6 +616,7 @@ a{ color: var(--brand); text-decoration:none; }
 }
 .toast.error{ background:#5A1F1B; }
 .toast.success{ background: #0E4A31; }
+.toast.warn{ background:#5A3B0F; }
 
 /* ============ MODAL ============ */
 .modal-overlay{
