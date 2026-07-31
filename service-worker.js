@@ -2,7 +2,7 @@
    service-worker.js — cache offline untuk PWA / WebView APK
    ========================================================= */
 
-const CACHE_NAME = 'tabungku-cache-v1';
+const CACHE_NAME = 'tabungku-cache-v2';
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
@@ -12,6 +12,7 @@ const ASSETS_TO_CACHE = [
   './css/responsive.css',
   './js/utils.js',
   './js/storage.js',
+  './js/streak-guard.js',
   './js/chart.js',
   './js/dashboard.js',
   './js/income.js',
