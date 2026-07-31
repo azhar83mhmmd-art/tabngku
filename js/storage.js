@@ -8,7 +8,8 @@ const Storage = (() => {
     TRANSACTIONS: 'tk_transactions',
     TARGETS: 'tk_targets',
     SETTINGS: 'tk_settings',
-    TRX_COUNTER: 'tk_trx_counter'
+    TRX_COUNTER: 'tk_trx_counter',
+    STREAK: 'tk_streak' // key yang sama dengan StreakModule (js/streak.js), disamakan agar backup ikut menyertakan data streak
   };
 
   const DEFAULT_SETTINGS = {
@@ -157,23 +158,73 @@ const Storage = (() => {
   }
 
   /* ---------- Backup / Restore / Reset ---------- */
-  function exportAll(){
+
+  /* Validasi ringan bentuk objek streak sebelum dipercaya & disimpan —
+     lapisan tambahan di luar auth-tag AES-GCM (defense in depth). */
+  function _isValidStreakShape(d){
+    return !!d && typeof d === 'object'
+      && typeof d.current === 'number' && d.current >= 0
+      && typeof d.best === 'number' && d.best >= 0
+      && typeof d.freezes === 'number' && d.freezes >= 0 && d.freezes <= 3
+      && typeof d.lastLevelId === 'number' && d.lastLevelId >= 1 && d.lastLevelId <= 8
+      && (d.lastDate === null || typeof d.lastDate === 'string')
+      && typeof d.history === 'object';
+  }
+
+  async function exportAll(){
+    const rawStreak = _get(KEYS.STREAK, null);
+    let streakField = null;
+    if (rawStreak){
+      const enc = (typeof StreakGuard !== 'undefined') ? await StreakGuard.encrypt(rawStreak) : null;
+      // enc null = Web Crypto tidak didukung browser ini — fallback simpan apa adanya
+      // (ditandai enc:false) daripada kehilangan data streak dari backup sama sekali.
+      streakField = enc ? { enc: true, iv: enc.iv, ct: enc.ct } : { enc: false, data: rawStreak };
+    }
     return {
-      version: 1,
+      version: 3,
       exportedAt: new Date().toISOString(),
       transactions: getTransactions(),
       targets: getTargets(),
       settings: getSettings(),
-      trxCounter: _get(KEYS.TRX_COUNTER, 0)
+      trxCounter: _get(KEYS.TRX_COUNTER, 0),
+      streak: streakField // terenkripsi AES-GCM — lihat js/streak-guard.js
     };
   }
 
-  function importAll(data){
+  /* Return { streakResult } — 'restored' | 'unprotected' | 'rejected' | 'none' —
+     supaya UI (settings.js) bisa kasih tahu user kalau streak-nya ditolak
+     karena file backup terindikasi diubah manual. */
+  async function importAll(data){
     if (!data || typeof data !== 'object') throw new Error('Format data tidak valid');
     if (Array.isArray(data.transactions)) saveTransactions(data.transactions);
     if (Array.isArray(data.targets)) saveTargets(data.targets);
     if (data.settings) _set(KEYS.SETTINGS, { ...DEFAULT_SETTINGS, ...data.settings });
     if (typeof data.trxCounter === 'number') _set(KEYS.TRX_COUNTER, data.trxCounter);
+
+    let streakResult = 'none';
+    if (data.streak && typeof data.streak === 'object' && typeof data.streak.enc === 'boolean'){
+      if (data.streak.enc === true){
+        const { ok, data: streakObj } = (typeof StreakGuard !== 'undefined')
+          ? await StreakGuard.decrypt(data.streak)
+          : { ok: false, data: null };
+        if (ok && _isValidStreakShape(streakObj)){
+          _set(KEYS.STREAK, streakObj);
+          streakResult = 'restored';
+        } else {
+          streakResult = 'rejected'; // gagal didekripsi / bentuk tidak valid -> kemungkinan diubah manual
+        }
+      } else if (_isValidStreakShape(data.streak.data)){
+        _set(KEYS.STREAK, data.streak.data);
+        streakResult = 'unprotected'; // backup dibuat di browser tanpa Web Crypto
+      } else {
+        streakResult = 'rejected';
+      }
+    } else if (data.streak){
+      // Format lama (sebelum enkripsi) atau field asing yang mengaku "streak" —
+      // tidak dipercaya begitu saja demi keamanan.
+      streakResult = 'rejected';
+    }
+    return { streakResult };
   }
 
   function resetAll(){
