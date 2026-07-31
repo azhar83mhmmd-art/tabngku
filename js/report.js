@@ -85,8 +85,8 @@ const ReportModule = (() => {
     URL.revokeObjectURL(url);
   }
 
-  function exportJson(){
-    const data = Storage.exportAll();
+  async function exportJson(){
+    const data = await Storage.exportAll();
     downloadFile(`tabungku-backup-${Utils.todayISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
     Utils.toast('Data JSON berhasil diexport', 'success');
   }
@@ -162,9 +162,13 @@ const ReportModule = (() => {
           type: 'warn',
           confirmText: 'Import',
           cancelText: 'Batal',
-          onConfirm: () => {
-            Storage.importAll(data);
-            Utils.toast('Data berhasil diimport', 'success');
+          onConfirm: async () => {
+            const { streakResult } = await Storage.importAll(data);
+            if (streakResult === 'rejected'){
+              Utils.toast('Data berhasil diimport, tapi streak di file terindikasi rusak/diubah manual sehingga tidak dipulihkan', 'warn');
+            } else {
+              Utils.toast('Data berhasil diimport', 'success');
+            }
             if (window.App) App.refreshGlobalViews();
           }
         });
