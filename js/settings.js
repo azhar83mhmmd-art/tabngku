@@ -46,8 +46,8 @@ const SettingsModule = (() => {
       highlightThemeButton(next);
     });
 
-    document.getElementById('backupBtn').addEventListener('click', () => {
-      const data = Storage.exportAll();
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+      const data = await Storage.exportAll();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -89,9 +89,13 @@ const SettingsModule = (() => {
             title: 'Restore Data?',
             message: 'Semua data saat ini akan digantikan oleh data backup ini. Lanjutkan?',
             type: 'warn', confirmText: 'Restore', cancelText: 'Batal',
-            onConfirm: () => {
-              Storage.importAll(data);
-              Utils.toast('Data berhasil direstore', 'success');
+            onConfirm: async () => {
+              const { streakResult } = await Storage.importAll(data);
+              if (streakResult === 'rejected'){
+                Utils.toast('Data berhasil direstore, tapi streak di file backup terindikasi rusak/diubah manual sehingga tidak dipulihkan', 'warn');
+              } else {
+                Utils.toast('Data berhasil direstore', 'success');
+              }
               if (window.App) App.refreshGlobalViews();
               init();
             }
